@@ -106,7 +106,7 @@ class CPU {
         }
 
         if (!this.paused) {
-            this.uptateTimers();
+            this.updateTimers();
         }
 
         this.playSound();
@@ -290,40 +290,119 @@ class CPU {
             case 0xA000:
                 this.i = (opcode & 0xFFF);
                 break;
+            // Jump to location nnn + V0
+            // PC is set to nnn + V0
             case 0xB000:
+                this.pc = (opcode & 0xFFF) + this.v[0];
                 break;
+            // Set Vx = random byte AND kk
+            // Interpreter generates random number from 0 to 255, which is ANDed with kk.
             case 0xC000:
+                let rand = Math.floor(Math.random() * 0xFF);
+
+                // opcode & 0xFF will allow us to use the lowest byte of the opcode.
+                this.v[x] = rand & (opcode & 0xFF);
                 break;
+            // Display n-byte sprite starting at memory I at (Vx, Vy), set VF = collision.
             case 0xD000:
+                let width = 8;
+                // height is equal to the last nibble of the opcode.
+                // opcode = 0xD235 => height will be 5.
+                let height = (opcode & 0xF);
+
+                // VF = 0, if pixels are erased this will be set to 1.
+                this.v[0xF] = 0;
+
+                for (let row = 0; row < height; row++) {
+                    // Grabs a single row of a sprite (8 bits).
+                    // this.i is equal to I in the technical documentation and contains the address where we should start.
+                    let sprite = this.memory[this.i + row];
+
+                    for (let col = 0; col < width; col++) {
+                        // Grab the left most bit and check if > 0.
+                        if ((sprite & 0x80) > 0) {
+                            // If it is bigger than 0, there is a 1 here and we have to be cautious when we draw or erase it.
+                            // This checks the return value of setPixel, if this is 1 a pixel was erased.
+                            if (this.renderer.setPixel(this.v[x] + col, this.v[y] + row)) {
+                                this.v[0xF] = 1;
+                            }
+                        }
+                    }
+
+                    // Shift left 1.
+                    // 10010000 << 1 => 0010000 (left most bit is cut off)
+                    sprite <<= 1;
+                }
                 break;
             case 0xE000:
                 switch (opcode & 0xFF) {
+                    // Skip next instruction if key with value Vx is pressed.
                     case 0x9E:
+                        if (this.keyboard.isKeyPressed(this.v[x])) {
+                            this.pc += 2;
+                        }
                         break;
+                    // Skip next instruction if key with value Vx is not pressed.
                     case 0xA1:
+                        if (!this.keyboard.isKeyPressed(this.v[x])) {
+                            this.pc += 2;
+                        }
                         break;
                 }
         
                 break;
             case 0xF000:
                 switch (opcode & 0xFF) {
+                    // Set Vx = delay timer value.
                     case 0x07:
+                        this.v[x] = this.delayTimer;
                         break;
+                    // Stop all execution until a key is pressed. Value of pressed key is stored in Vx.
                     case 0x0A:
+                        this.paused = true;
+
+                        this.keyboard.onNextKeyPress = function(key) {
+                            this.v[x] = key;
+                            this.paused = false;
+                        }.bind(this);
                         break;
+                    // Set delay timer to Vx
                     case 0x15:
+                        this.delayTimer = this.v[x];
                         break;
+                    // Set sound timer to Vx
                     case 0x18:
+                        this.soundTimer = this.v[x];
                         break;
+                    // Set I to I + Vx
                     case 0x1E:
+                        this.i += this.v[x]
                         break;
+                    // Set I to location of sprite for digit Vx
                     case 0x29:
+                        // Multiply by 5 because a sprite is 5 bytes long
+                        this.i = this.v[x] * 5
                         break;
+                    // Store BCD representation of Vx in memory location I, I+1 and I+2.
+                    // The interpreter takes the decimal value of Vx and stores the hundres in I, the tens in I+1 and the ones in I+2.
                     case 0x33:
+                        this.memory[this.i] = parseInt(this.v[x] / 100);
+
+                        this.memory[this.i + 1] = parseInt((this.v[x] % 100) / 10);
+
+                        this.memory[this.i + 2] = parseInt(this.v[x] % 10);
                         break;
+                    // Store Registers V0 through Vx in memory starting at I.
                     case 0x55:
+                        for (let registerIndex = 0; registerIndex <= x; registerIndex++) {
+                            this.memory[this.i + registerIndex] = this.v[registerIndex];
+                        }
                         break;
+                    // Read registers V0 through Vx starting at I.
                     case 0x65:
+                        for (let registerIndex = 0; registerIndex <= x; registerIndex++) {
+                            this.v[registerIndex] = this.memory[this.i + registerIndex];
+                        }
                         break;
                 }
         
