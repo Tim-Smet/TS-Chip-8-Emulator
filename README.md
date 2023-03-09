@@ -1,4 +1,6 @@
 # TS-Chip-8-Emulator
+Technical documentation: http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#2.4
+
 Based on a tutorial from freecodecamp.
 
 Chip-8 is a simple, interpreted, programming language. It can access up to 4KB of RAM from location 0x000 (0) to 0xFFF (4095). The first 512 bytes are reserved for the interpreter, from 0x000 to 0x1FF. Most programs start at location 0x200 (512). 
